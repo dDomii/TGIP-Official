@@ -306,6 +306,52 @@ app.post('/api/users/:id/adjust-time', authenticate, async (req, res) => {
   }
 });
 
+app.post('/api/users/:id/manual-entry', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const { date, clockIn, clockOut, overtimeNote } = req.body;
+
+  try {
+    const weekStart = getWeekStart(new Date(date));
+    
+    // Create new manual entry
+    const clockInDateTime = new Date(`${date}T${clockIn}:00`);
+    const clockOutDateTime = new Date(`${date}T${clockOut}:00`);
+    
+    // Check if this would be overtime (after 3:30 PM)
+    const shiftEnd = new Date(clockInDateTime);
+    shiftEnd.setHours(15, 30, 0, 0); // 3:30 PM
+    const isOvertime = clockOutDateTime > shiftEnd;
+    
+    await pool.execute(
+      `INSERT INTO time_entries (user_id, clock_in, clock_out, date, week_start, overtime_requested, overtime_note, overtime_approved) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id, 
+        clockInDateTime, 
+        clockOutDateTime, 
+        date, 
+        weekStart, 
+        isOvertime && overtimeNote ? true : false,
+        overtimeNote || null,
+        isOvertime && overtimeNote ? null : false // null means pending approval if overtime requested
+      ]
+    );
+
+    res.json({ 
+      success: true, 
+      message: isOvertime && overtimeNote 
+        ? 'Manual entry added with overtime request for admin approval' 
+        : 'Manual entry added successfully'
+    });
+  } catch (error) {
+    console.error('Manual entry error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 function getWeekStart(date) {
   const d = new Date(date);
   const day = d.getDay();

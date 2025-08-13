@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
   USER_PAYROLL_HISTORY: `${API_BASE_URL}/api/user-payroll-history`,
   USER_HOURS_PROGRESS: `${API_BASE_URL}/api/user-hours-progress`,
   USER_REQUIRED_HOURS: `${API_BASE_URL}/api/user-required-hours`,
+  USER_MANUAL_ENTRY: (id: string) => `${API_BASE_URL}/api/users/${id}/manual-entry`,
   
   // Overtime endpoints
   OVERTIME_REQUESTS: `${API_BASE_URL}/api/overtime-requests`,

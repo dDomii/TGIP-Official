@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { API_ENDPOINTS, buildApiUrl } from '../config/api';
-import { Plus, Edit2, User, Shield, Clock, Trash2, ChevronDown, ChevronUp, Download, Search, Filter, X } from 'lucide-react';
+import { Plus, Edit2, User, Shield, Clock, Trash2, ChevronDown, ChevronUp, Download, Search, Filter, X, CalendarPlus } from 'lucide-react';
 
 interface User {
   id: number;
@@ -89,9 +89,11 @@ export function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showTimeModal, setShowTimeModal] = useState(false);
+  const [showManualEntryModal, setShowManualEntryModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedUserForEntry, setSelectedUserForEntry] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set(DEPARTMENTS));
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,6 +114,12 @@ export function UserManagement() {
     clockIn: '',
     clockOut: '',
     date: new Date().toISOString().split('T')[0]
+  });
+  const [manualEntry, setManualEntry] = useState({
+    clockIn: '',
+    clockOut: '',
+    date: new Date().toISOString().split('T')[0],
+    overtimeNote: ''
   });
   const { token } = useAuth();
 
@@ -239,6 +247,42 @@ export function UserManagement() {
     }
   };
 
+  const handleManualEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedUserForEntry) return;
+
+    try {
+      const response = await fetch(`${API_ENDPOINTS.USERS}/${selectedUserForEntry.id}/manual-entry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(manualEntry),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('Manual time entry added successfully');
+        setShowManualEntryModal(false);
+        setManualEntry({
+          clockIn: '',
+          clockOut: '',
+          date: new Date().toISOString().split('T')[0],
+          overtimeNote: ''
+        });
+        setSelectedUserForEntry(null);
+      } else {
+        alert(data.message || 'Failed to add manual entry');
+      }
+    } catch (error) {
+      console.error('Error adding manual entry:', error);
+      alert('Failed to add manual entry');
+    }
+  };
+
   const handleDeleteUser = async () => {
     if (!deletingUser) return;
 
@@ -303,6 +347,11 @@ export function UserManagement() {
   const handleTimeEdit = (userId: number) => {
     setSelectedUserId(userId);
     setShowTimeModal(true);
+  };
+
+  const handleManualEntryClick = (user: User) => {
+    setSelectedUserForEntry(user);
+    setShowManualEntryModal(true);
   };
 
   const handleDeleteClick = (user: User) => {
@@ -633,6 +682,13 @@ export function UserManagement() {
                               <Clock className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              onClick={() => handleManualEntryClick(user)}
+                              className="text-purple-400 hover:text-purple-300 p-1.5 rounded-lg hover:bg-purple-900/30 transition-all duration-200 border border-transparent hover:border-purple-700/50"
+                              title="Add Manual Entry"
+                            >
+                              <CalendarPlus className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={() => handleDeleteClick(user)}
                               className="text-red-400 hover:text-red-300 p-1.5 rounded-lg hover:bg-red-900/30 transition-all duration-200 border border-transparent hover:border-red-700/50"
                               title="Delete User"
@@ -869,6 +925,133 @@ export function UserManagement() {
                   className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white py-2 px-4 rounded-lg font-medium hover:from-emerald-600 hover:to-green-700 transition-all duration-200"
                 >
                   Adjust Time
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Time Entry Modal */}
+      {showManualEntryModal && selectedUserForEntry && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 w-full max-w-md border border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 p-3 rounded-lg border border-purple-700/50">
+                <CalendarPlus className="w-6 h-6 text-purple-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Add Manual Time Entry</h3>
+                <p className="text-sm text-slate-400">{selectedUserForEntry.username}</p>
+              </div>
+            </div>
+            
+            <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-800/50 mb-4">
+              <div className="flex items-start gap-3">
+                <CalendarPlus className="w-5 h-5 text-blue-400 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-400 mb-1">Manual Entry</p>
+                  <p className="text-xs text-blue-300">
+                    This will add a new time entry for the selected user and date. 
+                    It will not modify existing entries or affect current payroll calculations.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <form onSubmit={handleManualEntry} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Date <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={manualEntry.date}
+                  onChange={(e) => setManualEntry({ ...manualEntry, date: e.target.value })}
+                  className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Clock In Time <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={manualEntry.clockIn}
+                  onChange={(e) => setManualEntry({ ...manualEntry, clockIn: e.target.value })}
+                  className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Clock Out Time <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={manualEntry.clockOut}
+                  onChange={(e) => setManualEntry({ ...manualEntry, clockOut: e.target.value })}
+                  className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Overtime Note (optional)
+                </label>
+                <textarea
+                  value={manualEntry.overtimeNote}
+                  onChange={(e) => setManualEntry({ ...manualEntry, overtimeNote: e.target.value })}
+                  className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-slate-400 resize-none"
+                  rows={3}
+                  placeholder="Optional note for overtime justification..."
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Add a note if this entry includes overtime hours (after 3:30 PM)
+                </p>
+              </div>
+
+              <div className="bg-amber-900/20 p-3 rounded-lg border border-amber-800/50">
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 text-amber-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-400 mb-1">Important Notes</p>
+                    <ul className="text-xs text-amber-300 space-y-1">
+                      <li>• This creates a new time entry and does not modify existing ones</li>
+                      <li>• Overtime pay requires admin approval through the overtime system</li>
+                      <li>• Entry will be included in future payroll calculations</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualEntryModal(false);
+                    setSelectedUserForEntry(null);
+                    setManualEntry({
+                      clockIn: '',
+                      clockOut: '',
+                      date: new Date().toISOString().split('T')[0],
+                      overtimeNote: ''
+                    });
+                  }}
+                  className="flex-1 bg-slate-700/50 text-slate-300 py-2 px-4 rounded-lg font-medium hover:bg-slate-600/50 transition-all duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-purple-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <CalendarPlus className="w-4 h-4" />
+                  Add Entry
                 </button>
               </div>
             </form>
